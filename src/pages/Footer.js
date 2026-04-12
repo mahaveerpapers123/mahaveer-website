@@ -90,7 +90,13 @@ function Footer() {
               </ul>
 
               <div className="footer-socials">
-                <a href="#" aria-label="Facebook" className="footer-social-link">
+                <a
+                  href="https://facebook.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Facebook"
+                  className="footer-social-link"
+                >
                   <svg
                     className="footer-social-svg"
                     width="18"
@@ -103,7 +109,13 @@ function Footer() {
                   </svg>
                 </a>
 
-                <a href="#" aria-label="Twitter" className="footer-social-link">
+                <a
+                  href="https://twitter.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Twitter"
+                  className="footer-social-link"
+                >
                   <svg
                     className="footer-social-svg"
                     width="20"
@@ -116,7 +128,13 @@ function Footer() {
                   </svg>
                 </a>
 
-                <a href="#" aria-label="Instagram" className="footer-social-link">
+                <a
+                  href="https://instagram.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Instagram"
+                  className="footer-social-link"
+                >
                   <svg
                     className="footer-social-svg"
                     width="20"
@@ -138,7 +156,13 @@ function Footer() {
                   </svg>
                 </a>
 
-                <a href="#" aria-label="Linkedin" className="footer-social-link">
+                <a
+                  href="https://linkedin.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Linkedin"
+                  className="footer-social-link"
+                >
                   <svg
                     className="footer-social-svg"
                     width="20"
@@ -203,19 +227,19 @@ function Footer() {
               <p>We Accept:</p>
 
               <div className="footer-payment-icons">
-                <a href="#" aria-label="Visa card">
+                <a href="/" aria-label="Visa card">
                   <img src="/images/payment-01.svg" alt="visa card" />
                 </a>
-                <a href="#" aria-label="Paypal">
+                <a href="/" aria-label="Paypal">
                   <img src="/images/payment-02.svg" alt="paypal" />
                 </a>
-                <a href="#" aria-label="Master card">
+                <a href="/" aria-label="Master card">
                   <img src="/images/payment-03.svg" alt="master card" />
                 </a>
-                <a href="#" aria-label="Apple pay">
+                <a href="/" aria-label="Apple pay">
                   <img src="/images/payment-04.svg" alt="apple pay" />
                 </a>
-                <a href="#" aria-label="Google pay">
+                <a href="/" aria-label="Google pay">
                   <img src="/images/payment-05.svg" alt="google pay" />
                 </a>
               </div>

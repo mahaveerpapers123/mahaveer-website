@@ -381,10 +381,9 @@ function Cart({ mode = "page", isOpen = false, onClose = () => {} }) {
         </div>
       </main>
       {renderConfirmPopup()}
+      <Footer />
     </div>
-    
   );
-  <Footer />
 }
 
 export default Cart;
