@@ -324,7 +324,7 @@ body {
 
 .homepage-product-media {
   position: relative;
-  height: 220px;
+  height: 270px;
   overflow: hidden;
   cursor: pointer;
   background: #f8fafc;
@@ -715,8 +715,8 @@ body {
   }
 
   .homepage-hero {
-    min-height: calc(100vh - 124px);
-    padding: 18px 14px 28px;
+    min-height: auto;
+    padding: 8px 14px 18px;
   }
 
   .homepage-hero-slider {
@@ -797,6 +797,14 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .homepage-product-media {
+    height: 230px;
+  }
+
+  .homepage-product-card-wide .homepage-product-media {
+    height: 240px;
+  }
+
   .homepage-quickview-grid {
     grid-template-columns: 1fr;
   }
@@ -816,16 +824,16 @@ body {
 
 @media (max-width: 767px) {
   .homepage-content {
-    padding-top: 120px;
+    padding-top: 112px;
   }
 
   .homepage-hero {
-    min-height: calc(100vh - 120px);
-    padding: 14px 10px 22px;
+    min-height: auto;
+    padding: 4px 10px 12px;
   }
 
   .homepage-hero-slider {
-    height: 280px;
+    height: 340px;
     border-radius: 18px;
     box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
   }
@@ -896,11 +904,11 @@ body {
   }
 
   .homepage-product-media {
-    height: 170px;
+    height: 250px;
   }
 
   .homepage-product-card-wide .homepage-product-media {
-    height: 180px;
+    height: 260px;
   }
 
   .homepage-product-body {

@@ -1,0 +1,32 @@
+.section-divider {
+  width: 100%;
+  padding: 8px 0;
+  display: flex;
+  justify-content: center;
+  margin-top: 30px;
+  margin-bottom: 30px;
+}
+
+.section-divider-line {
+  display: block;
+  width: min(100%, 1280px);
+  margin: 0 20px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+@media (max-width: 991px) {
+  .section-divider-line {
+    margin: 0 14px;
+  }
+}
+
+@media (max-width: 767px) {
+  .section-divider {
+    padding: 6px 0;
+  }
+
+  .section-divider-line {
+    margin: 0 10px;
+  }
+}

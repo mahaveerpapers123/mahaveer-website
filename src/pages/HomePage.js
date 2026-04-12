@@ -4,7 +4,7 @@ import Navbar from "./Navbar";
 import "./HomePage.css";
 import ReviewSection from "./ReviewSection";
 import Footer from "./Footer";
-
+import Divider from "./Divider";
 
 const slides = [
   "/images/slide1.jpg",
@@ -394,6 +394,8 @@ function HomePage() {
           </div>
         </section>
 
+        <Divider />
+
         <section className="homepage-arrivals-section">
           <div className="homepage-arrivals-container">
             <div className="homepage-arrivals-header">
@@ -419,6 +421,8 @@ function HomePage() {
             </div>
           </div>
         </section>
+
+        <Divider />
 
         <section className="homepage-best-section">
           <div className="homepage-best-container">
@@ -450,6 +454,7 @@ function HomePage() {
           </div>
         </section>
       </main>
+      <Divider />
 
       {quickViewItem ? (
         <div className="homepage-quickview-overlay" onClick={() => setQuickViewItem(null)}>
