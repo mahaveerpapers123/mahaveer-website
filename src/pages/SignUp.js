@@ -71,6 +71,7 @@ function SignUp() {
     return { error: text || "Something went wrong" };
   };
 
+
   const handleCustomerSignup = async (e) => {
     e.preventDefault();
     setMessage("");
@@ -83,7 +84,7 @@ function SignUp() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE}/signup`, {
+      const response = await fetch(`${API_BASE}/api/auth/signup`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -137,7 +138,7 @@ function SignUp() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE}/signup`, {
+      const response = await fetch(`${API_BASE}/api/auth/signup`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
