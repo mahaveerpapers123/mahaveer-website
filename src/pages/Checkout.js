@@ -23,6 +23,7 @@ function Checkout() {
   const navigate = useNavigate();
   const [form, setForm] = useState(initialForm);
   const [cartItems, setCartItems] = useState([]);
+  const [paymentMethod, setPaymentMethod] = useState("COD");
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -137,6 +138,189 @@ function Checkout() {
     return "";
   };
 
+  const buildPayload = () => ({
+    billing: {
+      name: form.name,
+      email: form.email,
+      line1: form.line1,
+      line2: form.line2,
+      city: form.city,
+      state: form.state,
+      postal_code: form.postal_code,
+      country: form.country,
+      phone: form.phone
+    },
+    shipping: {
+      name: form.name,
+      line1: form.line1,
+      line2: form.line2,
+      city: form.city,
+      state: form.state,
+      postal_code: form.postal_code,
+      country: form.country,
+      phone: form.phone
+    },
+    payment: {
+      method: paymentMethod
+    },
+    items: normalizedItems,
+    total
+  });
+
+  const placeInternalOrder = async (payload) => {
+    let response = await fetch(`${API_BASE}/api/checkout`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      response = await fetch(`${API_BASE}/api/orders`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+    }
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data?.message || data?.error || "Failed to place order");
+    }
+
+    const orderId =
+      data?.orderId ||
+      data?.order_id ||
+      data?.id ||
+      data?.order?.id ||
+      data?.order?.orderId ||
+      null;
+
+    if (!orderId) {
+      throw new Error("Order created but order id not returned from backend");
+    }
+
+    return { response, data, orderId };
+  };
+
+  const loadRazorpayScript = () =>
+    new Promise((resolve, reject) => {
+      if (window.Razorpay) {
+        resolve(true);
+        return;
+      }
+
+      const existingScript = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+      if (existingScript) {
+        existingScript.addEventListener("load", () => resolve(true));
+        existingScript.addEventListener("error", () => reject(new Error("Failed to load Razorpay SDK")));
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => reject(new Error("Failed to load Razorpay SDK"));
+      document.body.appendChild(script);
+    });
+
+  const clearCartAndRedirect = (message) => {
+    localStorage.removeItem("cartItems");
+    window.dispatchEvent(new Event("cartUpdated"));
+    setSuccessMessage(message);
+    setTimeout(() => {
+      navigate("/");
+    }, 1400);
+  };
+
+  const startRazorpayPayment = async (orderId) => {
+    await loadRazorpayScript();
+
+    const orderResponse = await fetch(`${API_BASE}/api/razorpay/order`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ orderId })
+    });
+
+    const orderData = await orderResponse.json().catch(() => ({}));
+
+    if (!orderResponse.ok) {
+      throw new Error(orderData?.message || orderData?.error || "Failed to create Razorpay order");
+    }
+
+    const options = {
+      key: orderData?.key,
+      amount: orderData?.amount,
+      currency: orderData?.currency || "INR",
+      name: "Mahaveer Paper Enterprises",
+      description: `Order ${orderId}`,
+      order_id: orderData?.razorpayOrderId,
+      prefill: {
+        name: form.name,
+        email: form.email,
+        contact: form.phone
+      },
+      notes: {
+        internal_order_id: orderId
+      },
+      theme: {
+        color: "#3c50e0"
+      },
+      modal: {
+        ondismiss: () => {
+          setSubmitting(false);
+          setErrorMessage("Payment window closed. Your order is created and payment is pending.");
+        }
+      },
+      handler: async function (response) {
+        try {
+          const verifyResponse = await fetch(`${API_BASE}/api/razorpay/verify`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              orderId,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature
+            })
+          });
+
+          const verifyData = await verifyResponse.json().catch(() => ({}));
+
+          if (!verifyResponse.ok) {
+            throw new Error(verifyData?.message || verifyData?.error || "Payment verification failed");
+          }
+
+          clearCartAndRedirect("Payment successful. Your order has been placed.");
+        } catch (error) {
+          setSubmitting(false);
+          setErrorMessage(error?.message || "Payment verification failed.");
+        }
+      }
+    };
+
+    const razorpay = new window.Razorpay(options);
+    razorpay.on("payment.failed", (response) => {
+      const reason =
+        response?.error?.description ||
+        response?.error?.reason ||
+        response?.error?.step ||
+        "Payment failed. Please try again.";
+      setSubmitting(false);
+      setErrorMessage(reason);
+    });
+    razorpay.open();
+  };
+
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
     setErrorMessage("");
@@ -150,69 +334,18 @@ function Checkout() {
 
     setSubmitting(true);
 
-    const payload = {
-      billing: {
-        name: form.name,
-        email: form.email,
-        line1: form.line1,
-        line2: form.line2,
-        city: form.city,
-        state: form.state,
-        postal_code: form.postal_code,
-        country: form.country,
-        phone: form.phone
-      },
-      shipping: {
-        name: form.name,
-        line1: form.line1,
-        line2: form.line2,
-        city: form.city,
-        state: form.state,
-        postal_code: form.postal_code,
-        country: form.country,
-        phone: form.phone
-      },
-      payment: {
-        method: "COD"
-      },
-      items: normalizedItems,
-      total
-    };
-
     try {
-      let response = await fetch(`${API_BASE}/api/checkout`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
+      const payload = buildPayload();
+      const { orderId } = await placeInternalOrder(payload);
 
-      if (!response.ok) {
-        response = await fetch(`${API_BASE}/api/orders`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(payload)
-        });
+      if (paymentMethod === "ONLINE") {
+        await startRazorpayPayment(orderId);
+        return;
       }
 
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(data?.message || data?.error || "Failed to place order");
-      }
-
-      localStorage.removeItem("cartItems");
-      window.dispatchEvent(new Event("cartUpdated"));
-      setSuccessMessage("Your order has been placed successfully.");
-      setTimeout(() => {
-        navigate("/");
-      }, 1200);
+      clearCartAndRedirect("Your order has been placed successfully.");
     } catch (error) {
       setErrorMessage(error?.message || "Something went wrong while placing the order.");
-    } finally {
       setSubmitting(false);
     }
   };
@@ -247,7 +380,9 @@ function Checkout() {
                     <span className="checkout-card-kicker">Delivery</span>
                     <h2>Contact and Address</h2>
                   </div>
-                  <div className="checkout-card-badge">Cash on Delivery</div>
+                  <div className="checkout-card-badge">
+                    {paymentMethod === "ONLINE" ? "Online Payment" : "Cash on Delivery"}
+                  </div>
                 </div>
 
                 <div className="checkout-grid">
@@ -357,13 +492,36 @@ function Checkout() {
                   </div>
                 </div>
 
-                <div className="checkout-payment-option">
-                  <div className="checkout-payment-icon">₹</div>
-                  <div className="checkout-payment-content">
-                    <h3>Cash on Delivery</h3>
-                    <p>Pay safely when your order arrives at your address.</p>
-                  </div>
-                  <div className="checkout-payment-status">Selected</div>
+                <div className="checkout-payment-methods">
+                  <button
+                    type="button"
+                    className={`checkout-payment-option ${paymentMethod === "COD" ? "selected" : ""}`}
+                    onClick={() => setPaymentMethod("COD")}
+                  >
+                    <div className="checkout-payment-icon">₹</div>
+                    <div className="checkout-payment-content">
+                      <h3>Cash on Delivery</h3>
+                      <p>Pay safely when your order arrives at your address.</p>
+                    </div>
+                    <div className={`checkout-payment-status ${paymentMethod === "COD" ? "active" : ""}`}>
+                      {paymentMethod === "COD" ? "Selected" : "Select"}
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`checkout-payment-option ${paymentMethod === "ONLINE" ? "selected" : ""}`}
+                    onClick={() => setPaymentMethod("ONLINE")}
+                  >
+                    <div className="checkout-payment-icon">⚡</div>
+                    <div className="checkout-payment-content">
+                      <h3>Online Payment</h3>
+                      <p>Pay instantly using Razorpay with cards, UPI, net banking, or wallet.</p>
+                    </div>
+                    <div className={`checkout-payment-status ${paymentMethod === "ONLINE" ? "active" : ""}`}>
+                      {paymentMethod === "ONLINE" ? "Selected" : "Select"}
+                    </div>
+                  </button>
                 </div>
               </div>
 
@@ -425,6 +583,11 @@ function Checkout() {
                     <span>{shippingCharge === 0 ? "Free" : `₹${shippingCharge.toFixed(2)}`}</span>
                   </div>
 
+                  <div className="checkout-total-row">
+                    <span>Payment</span>
+                    <span>{paymentMethod === "ONLINE" ? "Online Payment" : "Cash on Delivery"}</span>
+                  </div>
+
                   <div className="checkout-total-row grand">
                     <span>Total</span>
                     <strong>₹{total.toFixed(2)}</strong>
@@ -436,7 +599,13 @@ function Checkout() {
                   className="checkout-place-order-btn"
                   disabled={submitting || normalizedItems.length === 0}
                 >
-                  {submitting ? "Placing Order..." : "Place Order"}
+                  {submitting
+                    ? paymentMethod === "ONLINE"
+                      ? "Processing Payment..."
+                      : "Placing Order..."
+                    : paymentMethod === "ONLINE"
+                      ? "Pay Now"
+                      : "Place Order"}
                 </button>
 
                 <Link to="/cart" className="checkout-back-link secondary">
