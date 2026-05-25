@@ -7,12 +7,166 @@ const API_BASE =
   process.env.REACT_APP_API_URL?.replace(/\/$/, "") ||
   "https://mahaveerpapersbe.vercel.app";
 
+const normalizeUrl = (url) => {
+  if (typeof url !== "string") return "";
+  if (url.startsWith("http://")) return url.replace("http://", "https://");
+  return url;
+};
+
+const getProductText = (product) =>
+  [
+    product?.name,
+    product?.brand,
+    product?.model_name,
+    product?.description,
+    product?.category_slug,
+    product?.colour,
+    product?.barcode
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+const getProductImage = (product) =>
+  normalizeUrl(
+    product?.images?.[0] ||
+      product?.image_url ||
+      "/images/placeholder.png"
+  );
+
+const matchesAny = (product, terms) => {
+  const text = getProductText(product);
+  return terms.some((term) => text.includes(term.toLowerCase()));
+};
+
+const CATEGORY_DEFINITIONS = [
+  {
+    label: "Pens Collection",
+    value: "pens",
+    query: "pen",
+    terms: ["pen", "ball pen", "gel", "roller", "pentonic", "hauser", "flair", "parker", "unomax", "luxor"]
+  },
+  {
+    label: "Copier Papers",
+    value: "copier-papers",
+    query: "copier paper",
+    terms: ["copier", "paper", "gsm", "a4", "a3", "reflection", "jk", "b2b copier", "tnpl", "ledger"]
+  },
+  {
+    label: "Staplers & Pins",
+    value: "staplers-pins",
+    query: "stapler pins",
+    terms: ["stapler", "pins", "kangaroo", "dp-", "sr-", "hp-", "hs-", "staple"]
+  },
+  {
+    label: "Colours & Art",
+    value: "colours-art",
+    query: "colour art",
+    terms: ["colour", "color", "crayon", "wax", "poster", "water", "acrylic", "sketch", "artist", "canvas", "shades", "paint"]
+  },
+  {
+    label: "Pencils & Erasers",
+    value: "pencils-erasers",
+    query: "pencil eraser",
+    terms: ["pencil", "eraser", "lead", "sharpener", "apsara", "nataraj", "doms", "camlin"]
+  },
+  {
+    label: "Glue & Adhesives",
+    value: "glue-adhesives",
+    query: "glue adhesive",
+    terms: ["glue", "gum", "paste", "fevicol", "fevistick", "fevistik", "fevibond", "adhesive", "fevi"]
+  },
+  {
+    label: "Calculators",
+    value: "calculators",
+    query: "calculator",
+    terms: ["calculator", "casio", "orpat", "scientific", "fx-", "mj-", "hl-", "fc-"]
+  },
+  {
+    label: "Office Essentials",
+    value: "office-essentials",
+    query: "office",
+    terms: ["marker", "whiteboard", "stamp", "cutter", "punch", "file", "office", "gum", "clips"]
+  }
+];
+
+const CRAFT_DEFINITIONS = [
+  {
+    label: "Colours & Paints",
+    value: "colours-paints",
+    query: "colour paint",
+    terms: ["colour", "color", "paint", "poster", "water", "acrylic", "shades"]
+  },
+  {
+    label: "Sketch Pens",
+    value: "sketch-pens",
+    query: "sketch pen",
+    terms: ["sketch", "marker", "brush pen", "dual tip", "calligraphy"]
+  },
+  {
+    label: "Crayons & Wax Colours",
+    value: "crayons-wax",
+    query: "crayon wax",
+    terms: ["crayon", "wax", "twistic", "plastic colour"]
+  },
+  {
+    label: "Canvas & Boards",
+    value: "canvas-boards",
+    query: "canvas board",
+    terms: ["canvas", "board", "art board"]
+  },
+  {
+    label: "Glue & Craft Adhesives",
+    value: "craft-glue",
+    query: "glue",
+    terms: ["glue", "fevicol", "fevistik", "gum", "paste", "adhesive"]
+  },
+  {
+    label: "Geometry & Scales",
+    value: "geometry-scales",
+    query: "geometry scale",
+    terms: ["geometry", "scale", "ruler", "geofine", "compass"]
+  },
+  {
+    label: "Pencils & Drawing",
+    value: "drawing-pencils",
+    query: "pencil drawing",
+    terms: ["pencil", "drawing", "lead", "artist"]
+  },
+  {
+    label: "Kids Art Kits",
+    value: "kids-art-kits",
+    query: "art kit",
+    terms: ["kit", "creative", "little artist", "prep kit", "writing kit"]
+  }
+];
+
+const buildSmartItems = (definitions, products) =>
+  definitions.map((definition) => {
+    const matchedProducts = products.filter((product) => matchesAny(product, definition.terms));
+    const productWithImage =
+      matchedProducts.find((product) => product?.images?.[0] || product?.image_url) ||
+      matchedProducts[0] ||
+      products.find((product) => product?.images?.[0] || product?.image_url);
+
+    return {
+      label: definition.label,
+      title: definition.label,
+      value: definition.value,
+      query: definition.query,
+      type: "query",
+      count: matchedProducts.length,
+      image: productWithImage ? getProductImage(productWithImage) : "/images/placeholder.png"
+    };
+  });
+
 function Navbar() {
   const navigate = useNavigate();
   const [userName, setUserName] = useState("");
   const [categories, setCategories] = useState([]);
   const [menuData, setMenuData] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedCategoryQuery, setSelectedCategoryQuery] = useState("");
   const [selectedCategoryLabel, setSelectedCategoryLabel] = useState("All Categories");
   const [searchQuery, setSearchQuery] = useState("");
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
@@ -82,40 +236,24 @@ function Navbar() {
   }, []);
 
   useEffect(() => {
-    const fetchCategories = async () => {
+    const loadDropdownData = async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/categories`);
+        const response = await fetch(`${API_BASE}/api/products?category=all&limit=500`);
         const data = await response.json();
-        const normalized = Array.isArray(data) ? data : [];
-        const filtered = normalized.filter((item) => {
-          const label = (item?.label || "").trim().toLowerCase();
-          const value = (item?.value || "").trim().toLowerCase();
-          return label !== "all categories" && value !== "all";
-        });
-        const uniqueCategories = Array.from(
-          new Map(filtered.map((item) => [item.label, item])).values()
-        );
-        setCategories(uniqueCategories);
+        const products = Array.isArray(data?.items) ? data.items : [];
+
+        const smartCategories = buildSmartItems(CATEGORY_DEFINITIONS, products);
+        const smartCraftItems = buildSmartItems(CRAFT_DEFINITIONS, products);
+
+        setCategories(smartCategories);
+        setMenuData(smartCraftItems);
       } catch {
-        setCategories([]);
+        setCategories(buildSmartItems(CATEGORY_DEFINITIONS, []));
+        setMenuData(buildSmartItems(CRAFT_DEFINITIONS, []));
       }
     };
 
-    fetchCategories();
-  }, []);
-
-  useEffect(() => {
-    const fetchNavLinks = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/api/navlinks`);
-        const data = await response.json();
-        setMenuData(Array.isArray(data) ? data : []);
-      } catch {
-        setMenuData([]);
-      }
-    };
-
-    fetchNavLinks();
+    loadDropdownData();
   }, []);
 
   useEffect(() => {
@@ -155,44 +293,39 @@ function Navbar() {
     };
   }, []);
 
-  const craftItems = useMemo(() => {
-    return menuData.filter((item) => {
-      const title = (item.title || "").toLowerCase();
-      return title.includes("craft");
-    });
-  }, [menuData]);
-
   const visibleCraftItems = useMemo(() => {
-    if (craftItems.length > 0) return craftItems;
-    return categories.slice(0, 10).map((item) => ({
-      title: item.label,
-      type: "category",
-      path: item.value || item.label,
-      slugKey: item.value || item.label
-    }));
-  }, [craftItems, categories]);
+    if (menuData.length > 0) return menuData;
+    return buildSmartItems(CRAFT_DEFINITIONS, []);
+  }, [menuData]);
 
   const handleSearchSubmit = (event) => {
     event.preventDefault();
     const query = searchQuery.trim();
+    const finalQuery = [selectedCategoryQuery, query].filter(Boolean).join(" ").trim();
 
-    if (query) {
-      navigate(
-        `/shopping?query=${encodeURIComponent(query)}${
-          selectedCategory !== "all" ? `&category=${encodeURIComponent(selectedCategory)}` : ""
-        }`
-      );
+    if (finalQuery) {
+      navigate(`/shopping?query=${encodeURIComponent(finalQuery)}`);
+      setIsCategoryOpen(false);
+      setIsCraftOpen(false);
       return;
     }
 
-    if (selectedCategory !== "all") {
-      navigate(`/shopping?category=${encodeURIComponent(selectedCategory)}`);
-    }
+    navigate("/shopping");
+    setIsCategoryOpen(false);
+    setIsCraftOpen(false);
   };
 
   const handleCategorySelect = (item) => {
-    const value = item.value || item.label;
-    setSelectedCategory(value);
+    if (item.value === "all") {
+      setSelectedCategory("all");
+      setSelectedCategoryQuery("");
+      setSelectedCategoryLabel("All Categories");
+      setIsCategoryOpen(false);
+      return;
+    }
+
+    setSelectedCategory(item.value || item.label);
+    setSelectedCategoryQuery(item.query || item.label || "");
     setSelectedCategoryLabel(item.label || "All Categories");
     setIsCategoryOpen(false);
   };
@@ -206,6 +339,11 @@ function Navbar() {
     }
 
     const item = itemOrPath;
+
+    if (item.type === "query" && item.query) {
+      navigate(`/shopping?query=${encodeURIComponent(item.query)}`);
+      return;
+    }
 
     if (item.type === "product" && item.slugKey) {
       navigate(`/product/${encodeURIComponent(item.slugKey)}`);
@@ -223,7 +361,7 @@ function Navbar() {
 
       const key = keyFromPath || item.slugKey || item.title || "";
       if (key) {
-        navigate(`/shopping?category=${encodeURIComponent(key)}`);
+        navigate(`/shopping?query=${encodeURIComponent(key)}`);
         return;
       }
     }
@@ -289,7 +427,7 @@ function Navbar() {
                             type="button"
                             className={`navbar-category-item ${selectedCategory === "all" ? "active" : ""}`}
                             onClick={() =>
-                              handleCategorySelect({ label: "All Categories", value: "all" })
+                              handleCategorySelect({ label: "All Categories", value: "all", query: "" })
                             }
                           >
                             All Categories

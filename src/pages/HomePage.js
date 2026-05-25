@@ -23,6 +23,81 @@ const normalizeUrl = (url) => {
   return url;
 };
 
+const getProductImage = (product) =>
+  normalizeUrl(
+    product?.images?.[0] ||
+      product?.image_url ||
+      "/images/placeholder.png"
+  );
+
+const getProductText = (product) =>
+  [
+    product?.name,
+    product?.brand,
+    product?.model_name,
+    product?.description,
+    product?.category_slug
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+const matchesAny = (product, terms) => {
+  const text = getProductText(product);
+  return terms.some((term) => text.includes(term.toLowerCase()));
+};
+
+const buildSmartCategories = (items) => {
+  const definitions = [
+    {
+      title: "Pens Collection",
+      query: "pen",
+      terms: ["pen", "ball pen", "gel", "roller", "pentonic", "hauser", "flair", "parker", "unomax"]
+    },
+    {
+      title: "Copier Papers",
+      query: "copier",
+      terms: ["copier", "gsm", "paper", "a4", "a3", "reflection", "jk", "b2b copier"]
+    },
+    {
+      title: "Staplers & Pins",
+      query: "stapler",
+      terms: ["stapler", "pins", "kangaroo", "dp-", "sr-", "hp-", "hs-"]
+    },
+    {
+      title: "Colours & Art",
+      query: "colour",
+      terms: ["colour", "color", "crayon", "wax", "poster", "water", "acrylic", "sketch", "artist", "canvas", "shades"]
+    },
+    {
+      title: "Pencils & Erasers",
+      query: "pencil",
+      terms: ["pencil", "eraser", "lead", "sharpener", "apsara", "nataraj", "doms"]
+    },
+    {
+      title: "Glue & Adhesives",
+      query: "glue",
+      terms: ["glue", "gum", "paste", "fevicol", "fevistick", "fevistik", "fevibond", "adhesive"]
+    }
+  ];
+
+  return definitions.map((category) => {
+    const matchedProducts = items.filter((product) => matchesAny(product, category.terms));
+    const productWithImage =
+      matchedProducts.find((product) => product?.images?.[0] || product?.image_url) ||
+      matchedProducts[0] ||
+      items.find((product) => product?.images?.[0] || product?.image_url);
+
+    return {
+      title: category.title,
+      query: category.query,
+      image: productWithImage ? getProductImage(productWithImage) : "/images/placeholder.png",
+      count: matchedProducts.length,
+      type: "query"
+    };
+  });
+};
+
 function HomePage() {
   const navigate = useNavigate();
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -40,83 +115,67 @@ function HomePage() {
   }, []);
 
   useEffect(() => {
-    const fetchCategoryImage = async (slug) => {
-      const trySlugs = [slug, slug?.split("/").pop() || slug];
-
-      for (const currentSlug of trySlugs) {
-        try {
-          const response = await fetch(
-            `${API_BASE}/api/products?category=${encodeURIComponent(currentSlug)}&limit=1`
-          );
-          if (!response.ok) continue;
-
-          const data = await response.json();
-          const image = data?.items?.[0]?.images?.[0];
-
-          if (image) return normalizeUrl(image);
-        } catch {}
-      }
-
-      return "";
-    };
-
-    const loadCategories = async () => {
+    const loadHomeData = async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/categories`);
-        const raw = await response.json();
-
-        const list = Array.isArray(raw)
-          ? raw
-          : Array.isArray(raw?.data)
-          ? raw.data
-          : Array.isArray(raw?.categories)
-          ? raw.categories
-          : [];
-
-        const filtered = list
-          .filter((item) => item?.label && item?.value && item.value !== "all")
-          .slice(0, 6);
-
-        const images = await Promise.all(
-          filtered.map(async (item) => {
-            const fromApi = normalizeUrl(item.image);
-            if (fromApi) return fromApi;
-            return await fetchCategoryImage(item.value);
-          })
-        );
-
-        const finalCategories = filtered.map((item, index) => ({
-          title: item.label,
-          slug: item.value,
-          image: images[index] || "/images/placeholder.png"
-        }));
-
-        setCategories(finalCategories);
-      } catch {
-        setCategories([]);
-      }
-    };
-
-    loadCategories();
-  }, []);
-
-  useEffect(() => {
-    const loadProductsSections = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/api/products?limit=120`);
+        const response = await fetch(`${API_BASE}/api/products?category=all&limit=500`);
         const data = await response.json();
         const items = Array.isArray(data?.items) ? data.items : [];
         const shuffled = [...items].sort(() => Math.random() - 0.5);
 
         setNewArrivals(shuffled.slice(0, 12));
         setBestSellers(shuffled.slice(12, 24));
+        setCategories(buildSmartCategories(items));
       } catch {
         setNewArrivals([]);
         setBestSellers([]);
+        setCategories([
+          {
+            title: "Pens Collection",
+            query: "pen",
+            image: "/images/placeholder.png",
+            count: 0,
+            type: "query"
+          },
+          {
+            title: "Copier Papers",
+            query: "copier",
+            image: "/images/placeholder.png",
+            count: 0,
+            type: "query"
+          },
+          {
+            title: "Staplers & Pins",
+            query: "stapler",
+            image: "/images/placeholder.png",
+            count: 0,
+            type: "query"
+          },
+          {
+            title: "Colours & Art",
+            query: "colour",
+            image: "/images/placeholder.png",
+            count: 0,
+            type: "query"
+          },
+          {
+            title: "Pencils & Erasers",
+            query: "pencil",
+            image: "/images/placeholder.png",
+            count: 0,
+            type: "query"
+          },
+          {
+            title: "Glue & Adhesives",
+            query: "glue",
+            image: "/images/placeholder.png",
+            count: 0,
+            type: "query"
+          }
+        ]);
       }
     };
 
-    loadProductsSections();
+    loadHomeData();
   }, []);
 
   useEffect(() => {
@@ -130,8 +189,13 @@ function HomePage() {
 
   const mobileCategories = useMemo(() => categories.slice(0, 2), [categories]);
 
-  const handleCategoryClick = (slug) => {
-    navigate(`/products?category=${encodeURIComponent(slug)}`);
+  const handleCategoryClick = (item) => {
+    if (item?.type === "query") {
+      navigate(`/products?category=all&query=${encodeURIComponent(item.query)}`);
+      return;
+    }
+
+    navigate(`/products?category=${encodeURIComponent(item.slug || "all")}`);
   };
 
   const handleAddToCart = (product) => {
@@ -156,10 +220,7 @@ function HomePage() {
           mrp: Number(product.mrp || 0),
           mahaveer_price: Number(product.mahaveer_price || 0),
           quantity: 1,
-          image:
-            product?.images?.[0] ||
-            product?.image_url ||
-            "/images/placeholder.png"
+          image: getProductImage(product)
         });
       }
 
@@ -191,10 +252,7 @@ function HomePage() {
   };
 
   const renderProductCard = (product, index, onNavigate, variant = "compact") => {
-    const image =
-      product?.images?.[0] ||
-      product?.image_url ||
-      "/images/placeholder.png";
+    const image = getProductImage(product);
 
     return (
       <div className={`homepage-product-card ${variant === "wide" ? "homepage-product-card-wide" : ""}`} key={`${product.id}-${index}`}>
@@ -211,6 +269,9 @@ function HomePage() {
             src={image}
             alt={product.name}
             className="homepage-product-image"
+            onError={(e) => {
+              e.currentTarget.src = "/images/placeholder.png";
+            }}
           />
           <div className="homepage-product-overlay">
             <button
@@ -350,20 +411,23 @@ function HomePage() {
               {categories.map((item, index) => (
                 <button
                   type="button"
-                  key={`${item.slug}-${index}`}
+                  key={`${item.title}-${index}`}
                   className="homepage-category-card"
-                  onClick={() => handleCategoryClick(item.slug)}
+                  onClick={() => handleCategoryClick(item)}
                 >
                   <div className="homepage-category-image-wrap">
                     <img
                       src={item.image}
                       alt={item.title}
                       className="homepage-category-image"
+                      onError={(e) => {
+                        e.currentTarget.src = "/images/placeholder.png";
+                      }}
                     />
                   </div>
                   <div className="homepage-category-content">
                     <h3>{item.title}</h3>
-                    <span>Explore Now</span>
+                    <span>{item.count > 0 ? `${item.count} Products` : "Explore Now"}</span>
                   </div>
                 </button>
               ))}
@@ -373,20 +437,23 @@ function HomePage() {
               {mobileCategories.map((item, index) => (
                 <button
                   type="button"
-                  key={`${item.slug}-${index}`}
+                  key={`${item.title}-${index}`}
                   className="homepage-category-card"
-                  onClick={() => handleCategoryClick(item.slug)}
+                  onClick={() => handleCategoryClick(item)}
                 >
                   <div className="homepage-category-image-wrap">
                     <img
                       src={item.image}
                       alt={item.title}
                       className="homepage-category-image"
+                      onError={(e) => {
+                        e.currentTarget.src = "/images/placeholder.png";
+                      }}
                     />
                   </div>
                   <div className="homepage-category-content">
                     <h3>{item.title}</h3>
-                    <span>Explore Now</span>
+                    <span>{item.count > 0 ? `${item.count} Products` : "Explore Now"}</span>
                   </div>
                 </button>
               ))}
@@ -473,13 +540,12 @@ function HomePage() {
             <div className="homepage-quickview-grid">
               <div className="homepage-quickview-image-wrap">
                 <img
-                  src={
-                    quickViewItem?.images?.[0] ||
-                    quickViewItem?.image_url ||
-                    "/images/placeholder.png"
-                  }
+                  src={getProductImage(quickViewItem)}
                   alt={quickViewItem?.name}
                   className="homepage-quickview-image"
+                  onError={(e) => {
+                    e.currentTarget.src = "/images/placeholder.png";
+                  }}
                 />
               </div>
 
