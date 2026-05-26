@@ -334,32 +334,12 @@ function Products() {
 
                             <div className="products-specs-grid">
                               <div className="products-spec-item">
-                                <label>HSN%</label>
-                                <span>{Number(product.hsn_percentage || 0).toFixed(0)}%</span>
-                              </div>
-                              <div className="products-spec-item">
                                 <label>Mahaveer</label>
                                 <span>₹{Number(product.mahaveer_price || 0).toFixed(2)}</span>
                               </div>
                               <div className="products-spec-item">
                                 <label>MRP</label>
                                 <span>₹{Number(product.mrp || 0).toFixed(2)}</span>
-                              </div>
-                              <div className="products-spec-item">
-                                <label>Width</label>
-                                <span>{product.width ?? "-"}</span>
-                              </div>
-                              <div className="products-spec-item">
-                                <label>Length</label>
-                                <span>{product.length ?? "-"}</span>
-                              </div>
-                              <div className="products-spec-item">
-                                <label>Height</label>
-                                <span>{product.height ?? "-"}</span>
-                              </div>
-                              <div className="products-spec-item products-spec-item-wide">
-                                <label>Weight</label>
-                                <span>{product.weight ?? "-"}</span>
                               </div>
                             </div>
                           </div>

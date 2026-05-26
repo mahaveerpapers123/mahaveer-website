@@ -439,24 +439,14 @@ function ProductsWithoutFilters() {
                         </div>
 
                         <div className="products-without-specs">
-                          <div className="products-without-spec products-without-spec-highlight">
-                            <label>HSN%</label>
-                            <span>{Number(product.hsn_percentage || 0).toFixed(0)}%</span>
+                          <div className="products-without-spec">
+                            <label>Mahaveer</label>
+                            <span>₹{Number(product.mahaveer_price || 0).toFixed(2)}</span>
                           </div>
 
                           <div className="products-without-spec">
-                            <label>Width</label>
-                            <span>{product.width ?? "-"}</span>
-                          </div>
-
-                          <div className="products-without-spec">
-                            <label>Length</label>
-                            <span>{product.length ?? "-"}</span>
-                          </div>
-
-                          <div className="products-without-spec">
-                            <label>Height</label>
-                            <span>{product.height ?? "-"}</span>
+                            <label>MRP</label>
+                            <span>₹{Number(product.mrp || 0).toFixed(2)}</span>
                           </div>
                         </div>
                       </div>

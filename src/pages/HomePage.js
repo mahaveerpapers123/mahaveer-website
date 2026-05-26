@@ -331,32 +331,12 @@ function HomePage() {
 
           <div className="homepage-product-specs-grid">
             <div className="homepage-product-spec-item">
-              <label>HSN%</label>
-              <span>{Number(product.hsn_percentage || 0).toFixed(0)}%</span>
-            </div>
-            <div className="homepage-product-spec-item">
               <label>Mahaveer</label>
               <span>₹{Number(product.mahaveer_price || 0).toFixed(2)}</span>
             </div>
             <div className="homepage-product-spec-item">
               <label>MRP</label>
               <span>₹{Number(product.mrp || 0).toFixed(2)}</span>
-            </div>
-            <div className="homepage-product-spec-item">
-              <label>Width</label>
-              <span>{product.width ?? "-"}</span>
-            </div>
-            <div className="homepage-product-spec-item">
-              <label>Length</label>
-              <span>{product.length ?? "-"}</span>
-            </div>
-            <div className="homepage-product-spec-item">
-              <label>Height</label>
-              <span>{product.height ?? "-"}</span>
-            </div>
-            <div className="homepage-product-spec-item homepage-product-spec-item-wide">
-              <label>Weight</label>
-              <span>{product.weight ?? "-"}</span>
             </div>
           </div>
         </div>
