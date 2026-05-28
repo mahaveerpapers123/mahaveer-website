@@ -17,11 +17,57 @@ const API_BASE =
   process.env.REACT_APP_API_URL?.replace(/\/$/, "") ||
   "https://mahaveerpapersbe.vercel.app";
 
+const CATEGORY_DEFINITIONS = [
+  {
+    title: "Pens Collection",
+    value: "pens",
+    query: "pen",
+    terms: ["pen", "pens", "ball pen", "gel pen", "roller pen", "ballpoint", "retractable", "pentonic", "montex", "parker", "pilot", "unomax", "linc", "hauser", "flair", "luxor", "cello", "reynolds", "add gel"]
+  },
+  {
+    title: "Copier Papers",
+    value: "copier-papers",
+    query: "copier paper",
+    terms: ["copier", "paper", "gsm", "a4", "a3", "reflection", "jk red", "jk easy", "jk a", "copy crown", "tnpl", "ledger", "bond", "navigator"]
+  },
+  {
+    title: "Staplers & Pins",
+    value: "staplers-pins",
+    query: "stapler pins",
+    terms: ["stapler", "pins", "kangaroo", "dp", "sr", "hp", "hs", "staple", "punch"]
+  },
+  {
+    title: "Colours & Art",
+    value: "colours-art",
+    query: "colour art",
+    terms: ["colour", "color", "crayon", "wax", "poster", "water col", "water color", "acrylic", "sketch", "artist", "canvas", "shades", "paint", "camlin", "camel", "faber castell", "kores"]
+  },
+  {
+    title: "Pencils & Erasers",
+    value: "pencils-erasers",
+    query: "pencil eraser",
+    terms: ["pencil", "eraser", "lead", "sharpener", "apsara", "nataraj", "doms", "camlin", "2b", "0.7mm", "0.5mm"]
+  },
+  {
+    title: "Glue & Adhesives",
+    value: "glue-adhesives",
+    query: "glue adhesive",
+    terms: ["glue", "gum", "paste", "fevicol", "fevistick", "fevistik", "fevibond", "adhesive", "fevi kwik", "camlin gum", "camlin paste"]
+  }
+];
+
 const normalizeUrl = (url) => {
   if (typeof url !== "string") return "";
   if (url.startsWith("http://")) return url.replace("http://", "https://");
   return url;
 };
+
+const normalizeText = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 const getProductImage = (product) =>
   normalizeUrl(
@@ -31,57 +77,45 @@ const getProductImage = (product) =>
   );
 
 const getProductText = (product) =>
-  [
-    product?.name,
-    product?.brand,
-    product?.model_name,
-    product?.description,
-    product?.category_slug
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
+  normalizeText(
+    [
+      product?.name,
+      product?.brand,
+      product?.model_name,
+      product?.description,
+      product?.category_slug,
+      product?.colour,
+      product?.barcode,
+      product?.hsn_code
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+
+const escapeRegExp = (value) =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const hasWord = (text, word) => {
+  const cleanWord = normalizeText(word);
+  if (!cleanWord) return false;
+  const regex = new RegExp(`(^|\\s)${escapeRegExp(cleanWord)}s?(\\s|$)`, "i");
+  return regex.test(text);
+};
+
+const hasPhrase = (text, phrase) => {
+  const cleanPhrase = normalizeText(phrase);
+  if (!cleanPhrase) return false;
+  if (cleanPhrase.length <= 3) return hasWord(text, cleanPhrase);
+  return text.includes(cleanPhrase);
+};
 
 const matchesAny = (product, terms) => {
   const text = getProductText(product);
-  return terms.some((term) => text.includes(term.toLowerCase()));
+  return terms.some((term) => hasPhrase(text, term));
 };
 
 const buildSmartCategories = (items) => {
-  const definitions = [
-    {
-      title: "Pens Collection",
-      query: "pen",
-      terms: ["pen", "ball pen", "gel", "roller", "pentonic", "hauser", "flair", "parker", "unomax"]
-    },
-    {
-      title: "Copier Papers",
-      query: "copier",
-      terms: ["copier", "gsm", "paper", "a4", "a3", "reflection", "jk", "b2b copier"]
-    },
-    {
-      title: "Staplers & Pins",
-      query: "stapler",
-      terms: ["stapler", "pins", "kangaroo", "dp-", "sr-", "hp-", "hs-"]
-    },
-    {
-      title: "Colours & Art",
-      query: "colour",
-      terms: ["colour", "color", "crayon", "wax", "poster", "water", "acrylic", "sketch", "artist", "canvas", "shades"]
-    },
-    {
-      title: "Pencils & Erasers",
-      query: "pencil",
-      terms: ["pencil", "eraser", "lead", "sharpener", "apsara", "nataraj", "doms"]
-    },
-    {
-      title: "Glue & Adhesives",
-      query: "glue",
-      terms: ["glue", "gum", "paste", "fevicol", "fevistick", "fevistik", "fevibond", "adhesive"]
-    }
-  ];
-
-  return definitions.map((category) => {
+  return CATEGORY_DEFINITIONS.map((category) => {
     const matchedProducts = items.filter((product) => matchesAny(product, category.terms));
     const productWithImage =
       matchedProducts.find((product) => product?.images?.[0] || product?.image_url) ||
@@ -90,10 +124,11 @@ const buildSmartCategories = (items) => {
 
     return {
       title: category.title,
+      value: category.value,
       query: category.query,
       image: productWithImage ? getProductImage(productWithImage) : "/images/placeholder.png",
       count: matchedProducts.length,
-      type: "query"
+      type: "category"
     };
   });
 };
@@ -117,7 +152,7 @@ function HomePage() {
   useEffect(() => {
     const loadHomeData = async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/products?category=all&limit=500`);
+        const response = await fetch(`${API_BASE}/api/products?category=all&limit=1000`);
         const data = await response.json();
         const items = Array.isArray(data?.items) ? data.items : [];
         const shuffled = [...items].sort(() => Math.random() - 0.5);
@@ -128,50 +163,7 @@ function HomePage() {
       } catch {
         setNewArrivals([]);
         setBestSellers([]);
-        setCategories([
-          {
-            title: "Pens Collection",
-            query: "pen",
-            image: "/images/placeholder.png",
-            count: 0,
-            type: "query"
-          },
-          {
-            title: "Copier Papers",
-            query: "copier",
-            image: "/images/placeholder.png",
-            count: 0,
-            type: "query"
-          },
-          {
-            title: "Staplers & Pins",
-            query: "stapler",
-            image: "/images/placeholder.png",
-            count: 0,
-            type: "query"
-          },
-          {
-            title: "Colours & Art",
-            query: "colour",
-            image: "/images/placeholder.png",
-            count: 0,
-            type: "query"
-          },
-          {
-            title: "Pencils & Erasers",
-            query: "pencil",
-            image: "/images/placeholder.png",
-            count: 0,
-            type: "query"
-          },
-          {
-            title: "Glue & Adhesives",
-            query: "glue",
-            image: "/images/placeholder.png",
-            count: 0,
-            type: "query"
-          }
-        ]);
+        setCategories(buildSmartCategories([]));
       }
     };
 
@@ -190,12 +182,11 @@ function HomePage() {
   const mobileCategories = useMemo(() => categories.slice(0, 2), [categories]);
 
   const handleCategoryClick = (item) => {
-    if (item?.type === "query") {
-      navigate(`/products?category=all&query=${encodeURIComponent(item.query)}`);
-      return;
-    }
-
-    navigate(`/products?category=${encodeURIComponent(item.slug || "all")}`);
+    const params = new URLSearchParams();
+    params.set("category", item.value || "all");
+    params.set("label", item.title || "");
+    params.set("page", "1");
+    navigate(`/products?${params.toString()}`);
   };
 
   const handleAddToCart = (product) => {
@@ -501,6 +492,7 @@ function HomePage() {
           </div>
         </section>
       </main>
+
       <Divider />
 
       {quickViewItem ? (
@@ -560,6 +552,7 @@ function HomePage() {
           </div>
         </div>
       ) : null}
+
       <ReviewSection />
       <Footer />
     </div>

@@ -8,30 +8,242 @@ const API_BASE =
   process.env.REACT_APP_API_URL?.replace(/\/$/, "") ||
   "https://mahaveerpapersbe.vercel.app";
 
+const PAGE_LIMIT = 15;
+
+const CATEGORY_DEFINITIONS = [
+  {
+    label: "Pens Collection",
+    value: "pens",
+    aliases: ["pen", "pens", "pen collection", "pens collection", "ball pen", "gel pen", "roller pen"],
+    terms: ["pen", "pens", "ball pen", "gel pen", "roller pen", "ballpoint", "retractable", "pentonic", "montex", "parker", "pilot", "unomax", "linc", "hauser", "flair", "luxor", "cello", "reynolds", "add gel"]
+  },
+  {
+    label: "Copier Papers",
+    value: "copier-papers",
+    aliases: ["copier", "copier paper", "copier papers", "paper", "papers"],
+    terms: ["copier", "paper", "gsm", "a4", "a3", "reflection", "jk red", "jk easy", "jk a", "copy crown", "tnpl", "ledger", "bond", "navigator"]
+  },
+  {
+    label: "Staplers & Pins",
+    value: "staplers-pins",
+    aliases: ["stapler", "staplers", "pins", "stapler pins"],
+    terms: ["stapler", "pins", "kangaroo", "dp", "sr", "hp", "hs", "staple", "punch"]
+  },
+  {
+    label: "Colours & Art",
+    value: "colours-art",
+    aliases: ["colour", "colours", "color", "colors", "art", "paint", "paints", "colour art"],
+    terms: ["colour", "color", "crayon", "wax", "poster", "water col", "water color", "acrylic", "sketch", "artist", "canvas", "shades", "paint", "camlin", "camel", "faber castell", "kores"]
+  },
+  {
+    label: "Pencils & Erasers",
+    value: "pencils-erasers",
+    aliases: ["pencil", "pencils", "eraser", "erasers", "pencil eraser"],
+    terms: ["pencil", "eraser", "lead", "sharpener", "apsara", "nataraj", "doms", "camlin", "2b", "0.7mm", "0.5mm"]
+  },
+  {
+    label: "Glue & Adhesives",
+    value: "glue-adhesives",
+    aliases: ["glue", "adhesive", "adhesives", "gum", "paste", "glue adhesive"],
+    terms: ["glue", "gum", "paste", "fevicol", "fevistick", "fevistik", "fevibond", "adhesive", "fevi kwik", "camlin gum", "camlin paste"]
+  },
+  {
+    label: "Calculators",
+    value: "calculators",
+    aliases: ["calculator", "calculators"],
+    terms: ["calculator", "casio", "orpat", "scientific", "fx", "mj", "hl", "fc", "gst"]
+  },
+  {
+    label: "Office Essentials",
+    value: "office-essentials",
+    aliases: ["office", "office essentials"],
+    terms: ["marker", "whiteboard", "stamp", "cutter", "punch", "file", "clips", "board", "ink", "highlighter", "whitener", "correction"]
+  },
+  {
+    label: "Sketch Pens",
+    value: "sketch-pens",
+    aliases: ["sketch", "sketch pen", "sketch pens"],
+    terms: ["sketch", "marker", "brush pen", "dual tip", "calligraphy", "hotline", "fineliner"]
+  },
+  {
+    label: "Crayons & Wax Colours",
+    value: "crayons-wax",
+    aliases: ["crayon", "crayons", "wax", "wax colours"],
+    terms: ["crayon", "wax", "twistic", "plastic colour", "long wax", "jumbo wax"]
+  },
+  {
+    label: "Canvas & Boards",
+    value: "canvas-boards",
+    aliases: ["canvas", "board", "boards", "canvas board"],
+    terms: ["canvas", "board", "art board"]
+  },
+  {
+    label: "Geometry & Scales",
+    value: "geometry-scales",
+    aliases: ["geometry", "scale", "scales", "ruler"],
+    terms: ["geometry", "scale", "ruler", "geofine", "compass"]
+  },
+  {
+    label: "Kids Art Kits",
+    value: "kids-art-kits",
+    aliases: ["kit", "kits", "art kit", "kids art kit"],
+    terms: ["kit", "creative", "little artist", "prep kit", "writing kit", "schoola kit", "platinum kit"]
+  }
+];
+
+const normalizeUrl = (url) => {
+  if (typeof url !== "string") return "";
+  if (url.startsWith("http://")) return url.replace("http://", "https://");
+  return url;
+};
+
+const normalizeText = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const getProductImage = (product) =>
+  normalizeUrl(
+    product?.images?.[0] ||
+      product?.image_url ||
+      "/images/placeholder.png"
+  );
+
+const getProductSearchText = (product) =>
+  normalizeText(
+    [
+      product?.name,
+      product?.brand,
+      product?.model_name,
+      product?.description,
+      product?.category_slug,
+      product?.colour,
+      product?.barcode,
+      product?.hsn_code
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+
+const escapeRegExp = (value) =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const hasWord = (text, word) => {
+  const cleanWord = normalizeText(word);
+  if (!cleanWord) return false;
+  const regex = new RegExp(`(^|\\s)${escapeRegExp(cleanWord)}s?(\\s|$)`, "i");
+  return regex.test(text);
+};
+
+const hasPhrase = (text, phrase) => {
+  const cleanPhrase = normalizeText(phrase);
+  if (!cleanPhrase) return false;
+  if (cleanPhrase.length <= 3) return hasWord(text, cleanPhrase);
+  return text.includes(cleanPhrase);
+};
+
+const productMatchesDefinition = (product, definition) => {
+  const text = getProductSearchText(product);
+  return definition.terms.some((term) => hasPhrase(text, term));
+};
+
+const productMatchesQuery = (product, query) => {
+  const text = getProductSearchText(product);
+  const words = normalizeText(query).split(" ").filter(Boolean);
+  if (!words.length) return true;
+  return words.every((word) => hasPhrase(text, word));
+};
+
+const resolveDefinition = (value) => {
+  const cleanValue = normalizeText(value);
+
+  if (!cleanValue || cleanValue === "all") return null;
+
+  const byValue = CATEGORY_DEFINITIONS.find((item) => normalizeText(item.value) === cleanValue);
+  if (byValue) return byValue;
+
+  const byAlias = CATEGORY_DEFINITIONS.find((item) =>
+    item.aliases.some((alias) => normalizeText(alias) === cleanValue)
+  );
+  if (byAlias) return byAlias;
+
+  const byPhrase = CATEGORY_DEFINITIONS.find((item) =>
+    item.aliases.some((alias) => {
+      const cleanAlias = normalizeText(alias);
+      return cleanAlias.length > 3 && cleanValue.includes(cleanAlias);
+    })
+  );
+
+  return byPhrase || null;
+};
+
+const normalizeCategoriesFromApi = (raw) => {
+  const list = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw?.data)
+    ? raw.data
+    : Array.isArray(raw?.categories)
+    ? raw.categories
+    : [];
+
+  return list
+    .map((item) => ({
+      label: item?.label || item?.title || item?.name || item?.value || "",
+      value: item?.value || item?.slug || item?.category_slug || item?.label || item?.title || ""
+    }))
+    .filter((item) => item.label && item.value)
+    .filter((item) => normalizeText(item.value) !== "all" && normalizeText(item.label) !== "all categories");
+};
+
 function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
+  const [apiCategories, setApiCategories] = useState([]);
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: 15,
+    limit: PAGE_LIMIT,
     total: 0,
     totalPages: 1
   });
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get("category") || "all");
   const [priceRange, setPriceRange] = useState(searchParams.get("price") || "all");
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("query") || "");
   const [loading, setLoading] = useState(true);
 
   const currentPage = useMemo(() => Number(searchParams.get("page")) || 1, [searchParams]);
+
+  const categories = useMemo(() => {
+    const smartCategories = CATEGORY_DEFINITIONS.map((item) => ({
+      label: item.label,
+      value: item.value
+    }));
+
+    const merged = [
+      { label: "All Categories", value: "all" },
+      ...smartCategories,
+      ...apiCategories
+    ];
+
+    const seen = new Set();
+
+    return merged.filter((item) => {
+      const key = normalizeText(item.value || item.label);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [apiCategories]);
 
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         const response = await fetch(`${API_BASE}/api/categories`);
         const data = await response.json();
-        setCategories(Array.isArray(data) ? data : []);
+        setApiCategories(normalizeCategoriesFromApi(data));
       } catch {
-        setCategories([]);
+        setApiCategories([]);
       }
     };
 
@@ -41,64 +253,106 @@ function Products() {
   useEffect(() => {
     const queryCategory = searchParams.get("category") || "all";
     const queryPrice = searchParams.get("price") || "all";
+    const querySearch = searchParams.get("query") || "";
     setSelectedCategory(queryCategory);
     setPriceRange(queryPrice);
+    setSearchQuery(querySearch);
   }, [searchParams]);
 
   useEffect(() => {
     const loadProducts = async () => {
       setLoading(true);
+
       try {
-        const params = new URLSearchParams();
-        params.set("page", String(currentPage));
-        params.set("limit", "15");
-
-        if (selectedCategory !== "all") {
-          params.set("category", selectedCategory);
-        }
-
-        const response = await fetch(`${API_BASE}/api/products?${params.toString()}`);
+        const response = await fetch(`${API_BASE}/api/products?category=all&page=1&limit=1000`);
         const data = await response.json();
-        const rawItems = Array.isArray(data?.items) ? data.items : [];
-
-        let filtered = rawItems;
-
-        if (priceRange === "under-500") {
-          filtered = rawItems.filter((item) => Number(item.mahaveer_price || 0) < 500);
-        } else if (priceRange === "500-1000") {
-          filtered = rawItems.filter((item) => {
-            const price = Number(item.mahaveer_price || 0);
-            return price >= 500 && price <= 1000;
-          });
-        } else if (priceRange === "above-1000") {
-          filtered = rawItems.filter((item) => Number(item.mahaveer_price || 0) > 1000);
-        }
-
-        setProducts(filtered);
-        setPagination({
-          page: data?.page || currentPage,
-          limit: 15,
-          total: data?.total || filtered.length,
-          totalPages: Math.max(1, Math.ceil((data?.total || filtered.length) / 15))
-        });
+        const items = Array.isArray(data?.items) ? data.items : [];
+        setAllProducts(items);
       } catch {
-        setProducts([]);
-        setPagination({
-          page: 1,
-          limit: 15,
-          total: 0,
-          totalPages: 1
-        });
+        setAllProducts([]);
       } finally {
         setLoading(false);
       }
     };
 
     loadProducts();
-  }, [currentPage, selectedCategory, priceRange]);
+  }, []);
+
+  const filteredProducts = useMemo(() => {
+    let filtered = [...allProducts];
+
+    if (selectedCategory !== "all") {
+      const definition = resolveDefinition(selectedCategory);
+
+      if (definition) {
+        filtered = filtered.filter((product) => productMatchesDefinition(product, definition));
+      } else {
+        const selectedText = normalizeText(selectedCategory);
+        filtered = filtered.filter((product) => {
+          const categorySlug = normalizeText(product?.category_slug);
+          const productText = getProductSearchText(product);
+          return categorySlug === selectedText || productText.includes(selectedText);
+        });
+      }
+    }
+
+    if (searchQuery) {
+      const queryDefinition = resolveDefinition(searchQuery);
+
+      if (queryDefinition) {
+        filtered = filtered.filter((product) => productMatchesDefinition(product, queryDefinition));
+      } else {
+        filtered = filtered.filter((product) => productMatchesQuery(product, searchQuery));
+      }
+    }
+
+    if (priceRange === "under-500") {
+      filtered = filtered.filter((item) => Number(item.mahaveer_price || 0) < 500);
+    } else if (priceRange === "500-1000") {
+      filtered = filtered.filter((item) => {
+        const price = Number(item.mahaveer_price || 0);
+        return price >= 500 && price <= 1000;
+      });
+    } else if (priceRange === "above-1000") {
+      filtered = filtered.filter((item) => Number(item.mahaveer_price || 0) > 1000);
+    }
+
+    return filtered;
+  }, [allProducts, selectedCategory, searchQuery, priceRange]);
+
+  const totalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(filteredProducts.length / PAGE_LIMIT));
+  }, [filteredProducts]);
+
+  const safePage = useMemo(() => {
+    return Math.min(Math.max(1, currentPage), totalPages);
+  }, [currentPage, totalPages]);
+
+  const products = useMemo(() => {
+    const start = (safePage - 1) * PAGE_LIMIT;
+    return filteredProducts.slice(start, start + PAGE_LIMIT);
+  }, [filteredProducts, safePage]);
+
+  useEffect(() => {
+    setPagination({
+      page: safePage,
+      limit: PAGE_LIMIT,
+      total: filteredProducts.length,
+      totalPages
+    });
+  }, [safePage, filteredProducts.length, totalPages]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      const params = new URLSearchParams(searchParams);
+      params.set("page", String(totalPages));
+      setSearchParams(params, { replace: true });
+    }
+  }, [currentPage, totalPages, searchParams, setSearchParams]);
 
   const updateQueryParams = (updates) => {
     const params = new URLSearchParams(searchParams);
+
     Object.entries(updates).forEach(([key, value]) => {
       if (!value || value === "all") {
         params.delete(key);
@@ -106,9 +360,11 @@ function Products() {
         params.set(key, value);
       }
     });
+
     if (!updates.page) {
       params.set("page", "1");
     }
+
     setSearchParams(params);
   };
 
@@ -151,10 +407,7 @@ function Products() {
           mrp: Number(product.mrp || 0),
           mahaveer_price: Number(product.mahaveer_price || 0),
           quantity: 1,
-          image:
-            product?.images?.[0] ||
-            product?.image_url ||
-            "/images/placeholder.png"
+          image: getProductImage(product)
         });
       }
 
@@ -166,6 +419,7 @@ function Products() {
   const renderStars = (product) => {
     const rating = Number(product.rating || 4);
     const fullStars = Math.max(0, Math.min(5, Math.round(rating)));
+
     return (
       <div className="products-stars" aria-label={`${fullStars} star rating`}>
         {Array.from({ length: 5 }).map((_, index) => (
@@ -178,22 +432,22 @@ function Products() {
   };
 
   const getPageNumbers = () => {
-    const totalPages = pagination.totalPages;
+    const total = pagination.totalPages;
     const current = pagination.page;
 
-    if (totalPages <= 5) {
-      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    if (total <= 5) {
+      return Array.from({ length: total }, (_, index) => index + 1);
     }
 
     if (current <= 3) {
-      return [1, 2, 3, 4, "ellipsis", totalPages];
+      return [1, 2, 3, 4, "ellipsis", total];
     }
 
-    if (current >= totalPages - 2) {
-      return [1, "ellipsis", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    if (current >= total - 2) {
+      return [1, "ellipsis", total - 3, total - 2, total - 1, total];
     }
 
-    return [1, "ellipsis", current - 1, current, current + 1, "ellipsis-2", totalPages];
+    return [1, "ellipsis", current - 1, current, current + 1, "ellipsis-2", total];
   };
 
   const pageNumbers = getPageNumbers();
@@ -201,6 +455,7 @@ function Products() {
   return (
     <div className="products-page">
       <Navbar />
+
       <main className="products-main">
         <div className="products-shell">
           <div className="products-topbar">
@@ -208,6 +463,7 @@ function Products() {
               <span className="products-kicker">Collection</span>
               <h1>Explore All Products</h1>
             </div>
+
             <div className="products-breadcrumb">
               <Link to="/">Home</Link>
               <span>/</span>
@@ -222,6 +478,7 @@ function Products() {
 
                 <div className="products-filter-block">
                   <label>Category</label>
+
                   <div className="products-filter-options">
                     {categories.map((category, index) => (
                       <button
@@ -238,6 +495,7 @@ function Products() {
 
                 <div className="products-filter-block">
                   <label>Price Range</label>
+
                   <div className="products-filter-options">
                     <button
                       type="button"
@@ -246,6 +504,7 @@ function Products() {
                     >
                       All Prices
                     </button>
+
                     <button
                       type="button"
                       className={priceRange === "under-500" ? "active" : ""}
@@ -253,6 +512,7 @@ function Products() {
                     >
                       Under ₹500
                     </button>
+
                     <button
                       type="button"
                       className={priceRange === "500-1000" ? "active" : ""}
@@ -260,6 +520,7 @@ function Products() {
                     >
                       ₹500 to ₹1000
                     </button>
+
                     <button
                       type="button"
                       className={priceRange === "above-1000" ? "active" : ""}
@@ -275,7 +536,8 @@ function Products() {
             <section className="products-content">
               <div className="products-grid-top">
                 <p>
-                  Showing <strong>{products.length}</strong> products
+                  Showing <strong>{products.length}</strong> of{" "}
+                  <strong>{pagination.total}</strong> products
                 </p>
               </div>
 
@@ -292,10 +554,7 @@ function Products() {
                 <>
                   <div className="products-grid">
                     {products.map((product, index) => {
-                      const image =
-                        product?.images?.[0] ||
-                        product?.image_url ||
-                        "/images/placeholder.png";
+                      const image = getProductImage(product);
 
                       return (
                         <div className="products-card" key={`${product.id}-${index}`}>
@@ -304,7 +563,11 @@ function Products() {
                               src={image}
                               alt={product.name}
                               className="products-card-image"
+                              onError={(e) => {
+                                e.currentTarget.src = "/images/placeholder.png";
+                              }}
                             />
+
                             <div className="products-card-overlay">
                               <button
                                 type="button"
@@ -322,11 +585,13 @@ function Products() {
                                 <h3>{product.name}</h3>
                                 <p>{product.model_name || "Model not available"}</p>
                               </div>
+
                               {renderStars(product)}
                             </div>
 
                             <div className="products-card-price">
                               <strong>₹{Number(product.mahaveer_price || 0).toFixed(2)}</strong>
+
                               {Number(product.mrp || 0) > 0 ? (
                                 <span>₹{Number(product.mrp || 0).toFixed(2)}</span>
                               ) : null}
@@ -337,6 +602,7 @@ function Products() {
                                 <label>Mahaveer</label>
                                 <span>₹{Number(product.mahaveer_price || 0).toFixed(2)}</span>
                               </div>
+
                               <div className="products-spec-item">
                                 <label>MRP</label>
                                 <span>₹{Number(product.mrp || 0).toFixed(2)}</span>
@@ -390,6 +656,7 @@ function Products() {
           </div>
         </div>
       </main>
+
       <Footer />
     </div>
   );

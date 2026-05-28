@@ -48,47 +48,56 @@ function Checkout() {
     }
   }, []);
 
-  const subtotal = useMemo(() => {
-    return cartItems.reduce((sum, item) => {
-      const quantity = Number(item.quantity || 1);
+  const normalizedItems = useMemo(() => {
+    return cartItems.map((item) => {
+      const quantity = Math.max(1, Number(item.quantity || 1));
       const price = Number(item.mahaveer_price || item.price || item.mrp || 0);
-      return sum + price * quantity;
-    }, 0);
+      const lineTotal = Number((price * quantity).toFixed(2));
+
+      return {
+        id: item.id || item.product_id || null,
+        product_id: item.id || item.product_id || null,
+        product_name: item.name || item.product_name || "Item",
+        name: item.name || item.product_name || "Item",
+        quantity,
+        image:
+          item.image ||
+          item.image_url ||
+          (Array.isArray(item.images) ? item.images[0] : null) ||
+          null,
+        image_url:
+          item.image ||
+          item.image_url ||
+          (Array.isArray(item.images) ? item.images[0] : null) ||
+          null,
+        mahaveer_price: price,
+        price,
+        mrp: Number(item.mrp || 0),
+        hsn_percentage: Number(item.hsn_percentage || 0),
+        width: item.width ?? null,
+        height: item.height ?? null,
+        length: item.length ?? null,
+        weight: item.weight ?? null,
+        line_total: lineTotal,
+        total: lineTotal
+      };
+    });
   }, [cartItems]);
+
+  const subtotal = useMemo(() => {
+    return normalizedItems.reduce((sum, item) => {
+      return sum + Number(item.line_total || 0);
+    }, 0);
+  }, [normalizedItems]);
 
   const shippingCharge = useMemo(() => {
     if (subtotal <= 0) return 0;
     return subtotal >= 1000 ? 0 : 75;
   }, [subtotal]);
 
-  const total = subtotal + shippingCharge;
-
-  const normalizedItems = useMemo(() => {
-    return cartItems.map((item) => ({
-      id: item.id || item.product_id || null,
-      product_id: item.id || item.product_id || null,
-      product_name: item.name || item.product_name || "Item",
-      name: item.name || item.product_name || "Item",
-      quantity: Math.max(1, Number(item.quantity || 1)),
-      image:
-        item.image ||
-        item.image_url ||
-        (Array.isArray(item.images) ? item.images[0] : null) ||
-        null,
-      image_url:
-        item.image ||
-        item.image_url ||
-        (Array.isArray(item.images) ? item.images[0] : null) ||
-        null,
-      mahaveer_price: Number(item.mahaveer_price || item.price || 0),
-      mrp: Number(item.mrp || 0),
-      hsn_percentage: Number(item.hsn_percentage || 0),
-      width: item.width ?? null,
-      height: item.height ?? null,
-      length: item.length ?? null,
-      weight: item.weight ?? null
-    }));
-  }, [cartItems]);
+  const total = useMemo(() => {
+    return Number((subtotal + shippingCharge).toFixed(2));
+  }, [subtotal, shippingCharge]);
 
   const handleChange = (field, value) => {
     let nextValue = value;
@@ -138,34 +147,61 @@ function Checkout() {
     return "";
   };
 
-  const buildPayload = () => ({
-    billing: {
-      name: form.name,
-      email: form.email,
-      line1: form.line1,
-      line2: form.line2,
-      city: form.city,
-      state: form.state,
-      postal_code: form.postal_code,
-      country: form.country,
-      phone: form.phone
-    },
-    shipping: {
-      name: form.name,
-      line1: form.line1,
-      line2: form.line2,
-      city: form.city,
-      state: form.state,
-      postal_code: form.postal_code,
-      country: form.country,
-      phone: form.phone
-    },
-    payment: {
-      method: paymentMethod
-    },
-    items: normalizedItems,
-    total
-  });
+  const buildPayload = () => {
+    const orderSubtotal = Number(subtotal.toFixed(2));
+    const orderShippingCharge = Number(shippingCharge.toFixed(2));
+    const orderTotal = Number(total.toFixed(2));
+
+    return {
+      billing: {
+        name: form.name,
+        email: form.email,
+        line1: form.line1,
+        line2: form.line2,
+        city: form.city,
+        state: form.state,
+        postal_code: form.postal_code,
+        country: form.country,
+        phone: form.phone
+      },
+      shipping: {
+        name: form.name,
+        line1: form.line1,
+        line2: form.line2,
+        city: form.city,
+        state: form.state,
+        postal_code: form.postal_code,
+        country: form.country,
+        phone: form.phone,
+        charge: orderShippingCharge,
+        shipping_charge: orderShippingCharge
+      },
+      payment: {
+        method: paymentMethod,
+        currency: "INR",
+        subtotal: orderSubtotal,
+        shipping_charge: orderShippingCharge,
+        shippingCharge: orderShippingCharge,
+        delivery_charge: orderShippingCharge,
+        amount: orderTotal,
+        total: orderTotal,
+        total_amount: orderTotal,
+        payable_amount: orderTotal
+      },
+      items: normalizedItems,
+      subtotal: orderSubtotal,
+      shipping_charge: orderShippingCharge,
+      shippingCharge: orderShippingCharge,
+      delivery_charge: orderShippingCharge,
+      deliveryCharge: orderShippingCharge,
+      total: orderTotal,
+      total_amount: orderTotal,
+      grand_total: orderTotal,
+      payable_amount: orderTotal,
+      amount: orderTotal,
+      currency: "INR"
+    };
+  };
 
   const placeInternalOrder = async (payload) => {
     let response = await fetch(`${API_BASE}/api/checkout`, {
@@ -214,10 +250,15 @@ function Checkout() {
         return;
       }
 
-      const existingScript = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+      const existingScript = document.querySelector(
+        'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+      );
+
       if (existingScript) {
         existingScript.addEventListener("load", () => resolve(true));
-        existingScript.addEventListener("error", () => reject(new Error("Failed to load Razorpay SDK")));
+        existingScript.addEventListener("error", () =>
+          reject(new Error("Failed to load Razorpay SDK"))
+        );
         return;
       }
 
@@ -238,7 +279,7 @@ function Checkout() {
     }, 1400);
   };
 
-  const startRazorpayPayment = async (orderId) => {
+  const startRazorpayPayment = async (orderId, payload) => {
     await loadRazorpayScript();
 
     const orderResponse = await fetch(`${API_BASE}/api/razorpay/order`, {
@@ -246,13 +287,29 @@ function Checkout() {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ orderId })
+      body: JSON.stringify({
+        orderId,
+        subtotal: payload.subtotal,
+        shipping_charge: payload.shipping_charge,
+        shippingCharge: payload.shippingCharge,
+        delivery_charge: payload.delivery_charge,
+        total: payload.total,
+        total_amount: payload.total_amount,
+        grand_total: payload.grand_total,
+        payable_amount: payload.payable_amount,
+        amount: payload.amount,
+        currency: "INR"
+      })
     });
 
     const orderData = await orderResponse.json().catch(() => ({}));
 
     if (!orderResponse.ok) {
-      throw new Error(orderData?.message || orderData?.error || "Failed to create Razorpay order");
+      throw new Error(
+        orderData?.message ||
+          orderData?.error ||
+          "Failed to create Razorpay order"
+      );
     }
 
     const options = {
@@ -268,7 +325,10 @@ function Checkout() {
         contact: form.phone
       },
       notes: {
-        internal_order_id: orderId
+        internal_order_id: orderId,
+        subtotal: String(payload.subtotal),
+        shipping_charge: String(payload.shipping_charge),
+        total_amount: String(payload.total_amount)
       },
       theme: {
         color: "#3c50e0"
@@ -276,7 +336,9 @@ function Checkout() {
       modal: {
         ondismiss: () => {
           setSubmitting(false);
-          setErrorMessage("Payment window closed. Your order is created and payment is pending.");
+          setErrorMessage(
+            "Payment window closed. Your order is created and payment is pending."
+          );
         }
       },
       handler: async function (response) {
@@ -290,14 +352,22 @@ function Checkout() {
               orderId,
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature
+              razorpay_signature: response.razorpay_signature,
+              subtotal: payload.subtotal,
+              shipping_charge: payload.shipping_charge,
+              total_amount: payload.total_amount,
+              amount: payload.amount
             })
           });
 
           const verifyData = await verifyResponse.json().catch(() => ({}));
 
           if (!verifyResponse.ok) {
-            throw new Error(verifyData?.message || verifyData?.error || "Payment verification failed");
+            throw new Error(
+              verifyData?.message ||
+                verifyData?.error ||
+                "Payment verification failed"
+            );
           }
 
           clearCartAndRedirect("Payment successful. Your order has been placed.");
@@ -309,6 +379,7 @@ function Checkout() {
     };
 
     const razorpay = new window.Razorpay(options);
+
     razorpay.on("payment.failed", (response) => {
       const reason =
         response?.error?.description ||
@@ -318,6 +389,7 @@ function Checkout() {
       setSubmitting(false);
       setErrorMessage(reason);
     });
+
     razorpay.open();
   };
 
@@ -327,6 +399,7 @@ function Checkout() {
     setSuccessMessage("");
 
     const validation = validateForm();
+
     if (validation) {
       setErrorMessage(validation);
       return;
@@ -339,13 +412,15 @@ function Checkout() {
       const { orderId } = await placeInternalOrder(payload);
 
       if (paymentMethod === "ONLINE") {
-        await startRazorpayPayment(orderId);
+        await startRazorpayPayment(orderId, payload);
         return;
       }
 
       clearCartAndRedirect("Your order has been placed successfully.");
     } catch (error) {
-      setErrorMessage(error?.message || "Something went wrong while placing the order.");
+      setErrorMessage(
+        error?.message || "Something went wrong while placing the order."
+      );
       setSubmitting(false);
     }
   };
@@ -360,7 +435,10 @@ function Checkout() {
             <div className="checkout-hero-content">
               <span className="checkout-kicker">Order Details</span>
               <h1>Checkout</h1>
-              <p>Complete your delivery details and confirm your order in one simple step.</p>
+              <p>
+                Complete your delivery details and confirm your order in one
+                simple step.
+              </p>
             </div>
 
             <div className="checkout-breadcrumb">
@@ -381,7 +459,9 @@ function Checkout() {
                     <h2>Contact and Address</h2>
                   </div>
                   <div className="checkout-card-badge">
-                    {paymentMethod === "ONLINE" ? "Online Payment" : "Cash on Delivery"}
+                    {paymentMethod === "ONLINE"
+                      ? "Online Payment"
+                      : "Cash on Delivery"}
                   </div>
                 </div>
 
@@ -467,7 +547,9 @@ function Checkout() {
                       pattern="[0-9]{6}"
                       maxLength={6}
                       value={form.postal_code}
-                      onChange={(e) => handleChange("postal_code", e.target.value)}
+                      onChange={(e) =>
+                        handleChange("postal_code", e.target.value)
+                      }
                       placeholder="Enter 6 digit postal code"
                     />
                   </div>
@@ -495,7 +577,9 @@ function Checkout() {
                 <div className="checkout-payment-methods">
                   <button
                     type="button"
-                    className={`checkout-payment-option ${paymentMethod === "COD" ? "selected" : ""}`}
+                    className={`checkout-payment-option ${
+                      paymentMethod === "COD" ? "selected" : ""
+                    }`}
                     onClick={() => setPaymentMethod("COD")}
                   >
                     <div className="checkout-payment-icon">₹</div>
@@ -503,30 +587,48 @@ function Checkout() {
                       <h3>Cash on Delivery</h3>
                       <p>Pay safely when your order arrives at your address.</p>
                     </div>
-                    <div className={`checkout-payment-status ${paymentMethod === "COD" ? "active" : ""}`}>
+                    <div
+                      className={`checkout-payment-status ${
+                        paymentMethod === "COD" ? "active" : ""
+                      }`}
+                    >
                       {paymentMethod === "COD" ? "Selected" : "Select"}
                     </div>
                   </button>
 
                   <button
                     type="button"
-                    className={`checkout-payment-option ${paymentMethod === "ONLINE" ? "selected" : ""}`}
+                    className={`checkout-payment-option ${
+                      paymentMethod === "ONLINE" ? "selected" : ""
+                    }`}
                     onClick={() => setPaymentMethod("ONLINE")}
                   >
                     <div className="checkout-payment-icon">⚡</div>
                     <div className="checkout-payment-content">
                       <h3>Online Payment</h3>
-                      <p>Pay instantly using Razorpay with cards, UPI, net banking, or wallet.</p>
+                      <p>
+                        Pay instantly using Razorpay with cards, UPI, net
+                        banking, or wallet.
+                      </p>
                     </div>
-                    <div className={`checkout-payment-status ${paymentMethod === "ONLINE" ? "active" : ""}`}>
+                    <div
+                      className={`checkout-payment-status ${
+                        paymentMethod === "ONLINE" ? "active" : ""
+                      }`}
+                    >
                       {paymentMethod === "ONLINE" ? "Selected" : "Select"}
                     </div>
                   </button>
                 </div>
               </div>
 
-              {errorMessage ? <div className="checkout-alert error">{errorMessage}</div> : null}
-              {successMessage ? <div className="checkout-alert success">{successMessage}</div> : null}
+              {errorMessage ? (
+                <div className="checkout-alert error">{errorMessage}</div>
+              ) : null}
+
+              {successMessage ? (
+                <div className="checkout-alert success">{successMessage}</div>
+              ) : null}
             </section>
 
             <aside className="checkout-summary">
@@ -549,22 +651,25 @@ function Checkout() {
                   ) : (
                     normalizedItems.map((item, index) => {
                       const image =
-                        item.image_url ||
-                        item.image ||
-                        "/images/placeholder.png";
+                        item.image_url || item.image || "/images/placeholder.png";
 
                       return (
-                        <div className="checkout-item" key={`${item.product_id || item.name}-${index}`}>
+                        <div
+                          className="checkout-item"
+                          key={`${item.product_id || item.name}-${index}`}
+                        >
                           <div className="checkout-item-image-wrap">
-                            <img src={image} alt={item.product_name} className="checkout-item-image" />
+                            <img
+                              src={image}
+                              alt={item.product_name}
+                              className="checkout-item-image"
+                            />
                           </div>
 
                           <div className="checkout-item-content">
                             <h3>{item.product_name}</h3>
                             <p>Qty: {item.quantity}</p>
-                            <strong>
-                              ₹{(Number(item.mahaveer_price || 0) * Number(item.quantity || 1)).toFixed(2)}
-                            </strong>
+                            <strong>₹{Number(item.line_total || 0).toFixed(2)}</strong>
                           </div>
                         </div>
                       );
@@ -580,12 +685,20 @@ function Checkout() {
 
                   <div className="checkout-total-row">
                     <span>Shipping</span>
-                    <span>{shippingCharge === 0 ? "Free" : `₹${shippingCharge.toFixed(2)}`}</span>
+                    <span>
+                      {shippingCharge === 0
+                        ? "Free"
+                        : `₹${shippingCharge.toFixed(2)}`}
+                    </span>
                   </div>
 
                   <div className="checkout-total-row">
                     <span>Payment</span>
-                    <span>{paymentMethod === "ONLINE" ? "Online Payment" : "Cash on Delivery"}</span>
+                    <span>
+                      {paymentMethod === "ONLINE"
+                        ? "Online Payment"
+                        : "Cash on Delivery"}
+                    </span>
                   </div>
 
                   <div className="checkout-total-row grand">
@@ -604,8 +717,8 @@ function Checkout() {
                       ? "Processing Payment..."
                       : "Placing Order..."
                     : paymentMethod === "ONLINE"
-                      ? "Pay Now"
-                      : "Place Order"}
+                    ? `Pay ₹${total.toFixed(2)}`
+                    : `Place Order ₹${total.toFixed(2)}`}
                 </button>
 
                 <Link to="/cart" className="checkout-back-link secondary">
